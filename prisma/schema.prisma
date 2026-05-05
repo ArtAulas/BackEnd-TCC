@@ -41,5 +41,48 @@ model Post {
   parent    Post?   @relation("PostComments", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   comments  Post[]   @relation("PostComments")
 
+  magnitude Magnitude?
+  tema      Tema?
+  tipo      Tipo?
+  impacto   Impacto?
+  custo     Custo?
+
   createdAt DateTime @default(now())
 } 
+
+enum Magnitude {
+  MUNICIPAL
+  ESTADUAL
+  FEDERAL
+}
+
+enum Tema {
+  SAUDE
+  EDUCACAO
+  SEGURANCA
+  TRANSPORTE
+  MEIO_AMBIENTE
+  TECNOLOGIA
+  OUTRO
+}
+
+enum Tipo {
+  SUGESTAO
+  PROBLEMA
+  APOIO
+  CONSULTA
+}
+
+enum Impacto {
+  SOCIAL
+  ECONOMICO
+  AMBIENTAL
+  OUTRO
+}
+
+enum Custo {
+  BAIXO
+  MEDIO
+  ALTO
+  NAO_SEI
+}
