@@ -237,7 +237,6 @@ app.get('/allcomments/:idParent', async (req, res) => {
             orderBy: { id: "desc" },
             include:{ author: true }
         })
-    res.send(allPosts)
 
     const postIds = allPosts.map(p => p.id)
 
@@ -248,6 +247,17 @@ app.get('/allcomments/:idParent', async (req, res) => {
         },
         _count: {
         type: true
+        }
+    })
+
+    const userReactions = await prisma.reaction.findMany({
+        where: {
+            userId,
+            postId: { in: postIds }
+        },
+        select: {
+            postId: true,
+            type: true
         }
     })
 
