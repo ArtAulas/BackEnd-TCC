@@ -110,27 +110,127 @@ app.post('/posts', async (req, res) => {
 
 //Find all Posts
 app.get('/allposts', async (req, res) => {
+    const userId = req.query.userId
+    if (!userId){
+        return res.status(400).json({message:"Id de Usuário não informado"})
+    }
+
     const allPosts = await prisma.post.findMany({
             where:      { OR: [ { parentId: null }, { parentId: { isSet: false } }]},
             orderBy:    { id: "desc" },
             include:    { author: true }
     })
-    res.send(allPosts)
+
+    const postIds = allPosts.map(p => p.id)
+
+    const reactions = await prisma.reaction.groupBy({
+        by: ["postId", "type"],
+        where: {
+        postId: { in: postIds }
+        },
+        _count: {
+        type: true
+        }
+    })
+
+    const userReactions = await prisma.reaction.findMany({
+        where: {
+            userId,
+            postId: { in: postIds }
+        },
+        select: {
+            postId: true,
+            type: true
+        }
+    })
+
+    // Criar um mapa: { postId: { likes, dislikes } }
+    const reactionMap = {}
+
+    for (const r of reactions) {
+        if (!reactionMap[r.postId]) {
+        reactionMap[r.postId] = { likes: 0, dislikes: 0 }
+        }
+
+        if (r.type === "LIKE") {
+        reactionMap[r.postId].likes = r._count.type
+        }
+
+        if (r.type === "DISLIKE") {
+        reactionMap[r.postId].dislikes = r._count.type
+        }
+    }
+
+    const userReactionMap = {}
+
+    for (const r of userReactions) {
+        userReactionMap[r.postId] = r.type
+    }
+
+    const result = allPosts.map(post => ({
+        ...post,
+        likes: reactionMap[post.id]?.likes || 0,
+        dislikes: reactionMap[post.id]?.dislikes || 0,
+        userReaction: userReactionMap[post.id] || null
+    }))
+
+    res.send(result)
 })
 
 //Find single Post
 app.get('/post/:id', async (req, res) => {
     const { id } = req.params
-    const allPosts = await prisma.post.findUnique({
-            where: { id },
-            include:{ author: true }
+    const userId = req.query.userId
+
+    if (!userId) {
+        return res.status(400).json({ message: "Id de Usuário não informado" })
+    }
+
+    const post = await prisma.post.findUnique({
+        where: { id },
+        include: { author: true }
     })
-    res.send(allPosts)
+
+    if (!post) {
+        return res.status(404).json({ message: "Post não encontrado" })
+    }
+
+    const [likes, dislikes, userReaction] = await Promise.all([
+        prisma.reaction.count({
+        where: { postId: id, type: "LIKE" }
+        }),
+        prisma.reaction.count({
+        where: { postId: id, type: "DISLIKE" }
+        }),
+        prisma.reaction.findUnique({
+        where: {
+            userId_postId: {
+            userId,
+            postId: id
+            }
+        },
+        select: {
+            type: true
+        }
+        })
+    ])
+
+    res.send({
+        ...post,
+        likes,
+        dislikes,
+        userReaction: userReaction?.type || null
+    })
 })
 
 //Find all Comments from a Post
 app.get('/allcomments/:idParent', async (req, res) => {
     const { idParent } = req.params
+    const userId = req.query.userId
+    if (!userId){
+        return res.status(400).json({message:"Id de Usuário não informado"})
+    }
+
     const allPosts = await prisma.post.findMany(
         {
             where: { parentId: idParent },
@@ -138,6 +238,94 @@ app.get('/allcomments/:idParent', async (req, res) => {
             include:{ author: true }
         })
     res.send(allPosts)
+
+    const postIds = allPosts.map(p => p.id)
+
+    const reactions = await prisma.reaction.groupBy({
+        by: ["postId", "type"],
+        where: {
+        postId: { in: postIds }
+        },
+        _count: {
+        type: true
+        }
+    })
+
+    // Criar um mapa: { postId: { likes, dislikes } }
+    const reactionMap = {}
+
+    for (const r of reactions) {
+        if (!reactionMap[r.postId]) {
+        reactionMap[r.postId] = { likes: 0, dislikes: 0 }
+        }
+
+        if (r.type === "LIKE") {
+        reactionMap[r.postId].likes = r._count.type
+        }
+
+        if (r.type === "DISLIKE") {
+        reactionMap[r.postId].dislikes = r._count.type
+        }
+    }
+
+    const userReactionMap = {}
+
+    for (const r of userReactions) {
+        userReactionMap[r.postId] = r.type
+    }
+
+    const result = allPosts.map(post => ({
+        ...post,
+        likes: reactionMap[post.id]?.likes || 0,
+        dislikes: reactionMap[post.id]?.dislikes || 0,
+        userReaction: userReactionMap[post.id] || null
+    }))
+
+    res.send(result)
+})
+
+//Mark Reaction
+app.post('/reaction', async (req, res) => {
+    const { userId, postId, type } = req.body
+
+    if (!userId || !postId || !type) {
+        return res.status(400).json({ message: "Dados inválidos" })
+    }
+
+    try{
+        const existing = await prisma.reaction.findFirst({
+            where: {
+                userId,
+                postId
+            }
+        })
+
+        if (!existing) {
+            const reaction = await prisma.reaction.create({
+                data: { userId, postId, type }
+            })
+
+            return res.json({ action: "created", reaction })
+        }
+
+        if (existing.type === type) {
+        await prisma.reaction.delete({
+            where: { id: existing.id }
+        })
+
+        return res.json({ action: "removed" })
+        }
+        
+        const updated = await prisma.reaction.update({
+            where: { id: existing.id },
+            data: { type }
+        })
+
+        return res.json({ action: "updated", reaction: updated })
+    } catch (error){
+        console.error(error)
+        res.status(500).json({ message: "Erro ao processar reação" })
+    }
 })
 
 app.listen(3000, () => {
