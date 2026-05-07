@@ -21,6 +21,88 @@ app.get('/allusers', async (req, res) => {
     res.send(allUsers)
 })
 
+//Find User's Posts
+app.get('/user/posts', async (req, res) => {
+    const userId = req.query.userId
+    const authorId = req.query.authorId
+    if (!userId){
+        return res.status(400).json({message:"Id de Usuário não informado"})
+    }
+    if (!authorId){
+        return res.status(400).json({message:"Id de Autor não informado"})
+    }
+
+    const allPosts = await prisma.post.findMany({
+            where:      { authorId, OR: [ { parentId: null }, { parentId: { isSet: false } }]},
+            orderBy:    { id: "desc" },
+            include:    { author: true }
+    })
+
+    const postIds = allPosts.map(p => p.id)
+
+    const reactions = await prisma.reaction.groupBy({
+        by: ["postId", "type"],
+        where: {
+        postId: { in: postIds }
+        },
+        _count: {
+        type: true
+        }
+    })
+
+    const userReactions = await prisma.reaction.findMany({
+        where: {
+            userId,
+            postId: { in: postIds }
+        },
+        select: {
+            postId: true,
+            type: true
+        }
+    })
+
+    // Criar um mapa: { postId: { likes, dislikes } }
+    const reactionMap = {}
+
+    for (const r of reactions) {
+        if (!reactionMap[r.postId]) {
+        reactionMap[r.postId] = { likes: 0, dislikes: 0 }
+        }
+
+        if (r.type === "LIKE") {
+        reactionMap[r.postId].likes = r._count.type
+        }
+
+        if (r.type === "DISLIKE") {
+        reactionMap[r.postId].dislikes = r._count.type
+        }
+    }
+
+    const userReactionMap = {}
+
+    for (const r of userReactions) {
+        userReactionMap[r.postId] = r.type
+    }
+
+    const result = allPosts.map(post => ({
+        ...post,
+        likes: reactionMap[post.id]?.likes || 0,
+        dislikes: reactionMap[post.id]?.dislikes || 0,
+        userReaction: userReactionMap[post.id] || null
+    }))
+
+    res.send(result)
+})
+
+//Find single user
+app.get('/user/:id', async (req, res) => {
+    const { id } = req.params
+    const User = await prisma.user.findFirst({
+        where:{id}
+    })
+    res.send(User)
+})
+
 //Create Users
 app.post('/users', async (req, res) => {
 
