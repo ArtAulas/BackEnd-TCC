@@ -20,6 +20,10 @@ model User {
   birthDate DateTime
   cpf       String @unique
   password  String
+
+  cidade    String
+  estado    String
+
   twoFactorCode String?
   twoFactorExpires DateTime?
   createdAt DateTime @default(now())
