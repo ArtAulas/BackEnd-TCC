@@ -192,13 +192,35 @@ app.post('/posts', async (req, res) => {
 
 //Find all Posts
 app.get('/allposts', async (req, res) => {
-    const userId = req.query.userId
+    const {
+        userId,
+        magnitude,
+        tema,
+        tipo,
+        impacto,
+        custo
+    } = req.query
+
+
     if (!userId){
         return res.status(400).json({message:"Id de Usuário não informado"})
     }
 
+    const filters = {
+        OR: [
+            { parentId: null },
+            { parentId: { isSet: false } }
+        ]
+    }
+
+    if (magnitude) filters.magnitude = magnitude
+    if (tema) filters.tema = tema
+    if (tipo) filters.tipo = tipo
+    if (impacto) filters.impacto = impacto
+    if (custo) filters.custo = custo
+
     const allPosts = await prisma.post.findMany({
-            where:      { OR: [ { parentId: null }, { parentId: { isSet: false } }]},
+            where:       filters ,
             orderBy:    { id: "desc" },
             include:    { author: true }
     })
