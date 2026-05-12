@@ -2,12 +2,17 @@ import express from 'express'
 import { PrismaClient } from "@prisma/client";
 import cors from 'cors'
 import { send2FACodeEmail } from "./mail.js"
+import dotenv from "dotenv"
+dotenv.config()
 
 const app = express()
 app.use(express.json())
 
 //Access to backend
-app.use(cors())
+app.use(cors({
+  origin: process.env.FRONTEND_URL
+}))
+console.log(process.env.FRONTEND_URL)
 
 const prisma = new PrismaClient();
 
