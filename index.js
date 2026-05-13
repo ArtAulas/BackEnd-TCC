@@ -3,6 +3,7 @@ import { PrismaClient } from "@prisma/client";
 import cors from 'cors'
 import { send2FACodeEmail } from "./mail.js"
 import dotenv from "dotenv"
+import bcrypt from 'bcrypt'
 dotenv.config()
 
 const app = express()
@@ -110,49 +111,84 @@ app.get('/user/:id', async (req, res) => {
 
 //Create Users
 app.post('/users', async (req, res) => {
+    try {
+        const { password, ...rest } = req.body
 
-    const newUser = await prisma.user.create({
-        data: req.body
-    })
+        // Gera hash da senha
+        const hashedPassword = await bcrypt.hash(password, 10)
 
-    res.json(newUser)
+        const newUser = await prisma.user.create({
+            data: {
+                ...rest,
+                password: hashedPassword
+            }
+        })
 
+        res.status(201).json(newUser)
+
+    } catch (error) {
+        console.log(error)
+        res.status(500).json({ message: "Erro no servidor" })
+    }
 })
 
 //Login
 app.post('/login', async (req, res) => {
-    const { email, password }=req.body
-    try{
-        const user = await prisma.user.findFirst({
-            where:{
-                email : email,
-                password : password
+    const { email, password } = req.body
+
+    try {
+
+        // Busca usuário pelo email
+        const user = await prisma.user.findUnique({
+            where: {
+                email: email
             }
         })
 
-        if (!user){
-            return res.status(401).send({ message: "Email ou senha inválidos" })
+        // Verifica se usuário existe
+        if (!user) {
+            return res.status(401).send({
+                message: "Email ou senha inválidos"
+            })
         }
 
-        const code = Math.floor(100000 + Math.random() * 900000).toString()
+        // Compara senha digitada com hash
+        const passwordMatch = await bcrypt.compare(
+            password,
+            user.password
+        )
+
+        if (!passwordMatch) {
+            return res.status(401).send({
+                message: "Email ou senha inválidos"
+            })
+        }
+
+        const code = Math.floor(
+            100000 + Math.random() * 900000
+        ).toString()
 
         await prisma.user.update({
             where: { email },
             data: {
                 twoFactorCode: code,
-                twoFactorExpires: new Date(Date.now() + 5 * 60 * 1000) // 5 min
+                twoFactorExpires: new Date(Date.now() + 5 * 60 * 1000)
             }
         })
 
         await send2FACodeEmail(email, code)
 
         return res.status(200).send({
-        message: "Login realizado com sucesso",
-        user_id: user.id
-        })    
-    } catch(error){
+            message: "Login realizado com sucesso",
+            user_id: user.id
+        })
+
+    } catch(error) {
         console.log(error)
-        res.status(500).send({message : "Erro no Servidor"})
+
+        res.status(500).send({
+            message: "Erro no servidor"
+        })
     }
 })
 
