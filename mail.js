@@ -1,10 +1,9 @@
 import nodemailer from "nodemailer";
 
 const transporter = nodemailer.createTransport({
-  service: "gmail",
-  port: 465,
-  secure: true,
-  family: 4,
+  host: "smtp-relay.brevo.com",
+  port: 587,
+  secure: false,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
@@ -14,7 +13,7 @@ const transporter = nodemailer.createTransport({
 export async function send2FACodeEmail(to, code) {
   try {
     const info = await transporter.sendMail({
-      from: `"Auth App" <${process.env.EMAIL_USER}>`,
+      from: `Auth App<carelliarthur@gmail.com>`,
       to,
       subject: "Seu código de verificação",
       text: `Seu código de verificação é: ${code}`,
