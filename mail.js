@@ -1,25 +1,29 @@
-import nodemailer from "nodemailer";
+import { BrevoClient } from "@getbrevo/brevo";
 
-const transporter = nodemailer.createTransport({
-  host: "smtp-relay.brevo.com",
-  port: 587,
-  secure: false,
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
+const client = new BrevoClient({
+  apiKey: process.env.BREVO_API_KEY,
 });
 
 export async function send2FACodeEmail(to, code) {
   try {
-    const info = await transporter.sendMail({
-      from: `Auth App<carelliarthur@gmail.com>`,
-      to,
+    const result = await client.transactionalEmails.sendTransacEmail({
+      sender: {
+        email: "carelliarthur@gmail.com",
+        name: "Auth App",
+      },
+
+      to: [
+        {
+          email: to,
+        },
+      ],
+
       subject: "Seu código de verificação",
-      text: `Seu código de verificação é: ${code}`,
+
+      textContent: `Seu código de verificação é: ${code}`,
     });
 
-    console.log("Email enviado:", info.messageId);
+    console.log("Email enviado:", result);
   } catch (error) {
     console.error("Erro ao enviar email:", error);
     throw error;
